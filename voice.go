@@ -415,7 +415,7 @@ func (v *VoiceConnection) onEvent(message []byte) {
 		}
 
 		// Start the voice websocket heartbeat to keep the connection alive
-		go v.wsHeartbeat(v.wsConn, v.close, v.op2.HeartbeatInterval)
+		go v.wsHeartbeat(v.wsConn, v.close, 100)
 		// TODO monitor a chan/bool to verify this was successful
 
 		// Start the UDP connection
@@ -492,7 +492,6 @@ type voiceHeartbeatOp struct {
 // is still connected.  If you do not send these heartbeats Discord will
 // disconnect the websocket connection after a few seconds.
 func (v *VoiceConnection) wsHeartbeat(wsConn *websocket.Conn, close <-chan struct{}, i time.Duration) {
-
 	if close == nil || wsConn == nil {
 		return
 	}
@@ -500,19 +499,18 @@ func (v *VoiceConnection) wsHeartbeat(wsConn *websocket.Conn, close <-chan struc
 	var err error
 	ticker := time.NewTicker(i * time.Millisecond)
 	defer ticker.Stop()
-	for {
-		v.log(LogDebug, "sending heartbeat packet")
-		v.wsMutex.Lock()
-		err = wsConn.WriteJSON(voiceHeartbeatOp{3, int(time.Now().Unix())})
-		v.wsMutex.Unlock()
-		if err != nil {
-			v.log(LogError, "error sending heartbeat to voice endpoint %s, %s", v.endpoint, err)
-			return
-		}
 
+	for {
 		select {
 		case <-ticker.C:
-			// continue loop and send heartbeat
+			v.log(LogDebug, "sending heartbeat packet")
+			v.wsMutex.Lock()
+			err = wsConn.WriteJSON(voiceHeartbeatOp{3, int(time.Now().Unix())})
+			v.wsMutex.Unlock()
+			if err != nil {
+				v.log(LogError, "error sending heartbeat to voice endpoint %s, %s", v.endpoint, err)
+				return
+			}
 		case <-close:
 			return
 		}
